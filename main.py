@@ -150,7 +150,7 @@ def main():
     capture = cv2.VideoCapture(RTSP_STREAM_1)
 
     # Initialize MotPy tracker
-    tracker = MultiObjectTracker(dt=0.5)
+    tracker = MultiObjectTracker(dt=1.0)
 
     while True:
         try:
