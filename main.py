@@ -150,7 +150,7 @@ def main():
     capture = cv2.VideoCapture(RTSP_STREAM_1)
 
     # Initialize MotPy tracker
-    tracker = MultiObjectTracker(dt=1.0)
+    tracker = MultiObjectTracker(dt=2.0)
 
     while True:
         try:
@@ -164,12 +164,12 @@ def main():
                     frame = plot_boxes_custom(frame, rtsp_stream_num=1)
                     frame = plot_boxes_tracks(results=results, frame=frame, tracker=tracker)
                     frame = frame[250:1030, 0:1280]
-                    # cv2.imshow("Camera Stream", frame)
-                    # cv2.waitKey(1)
+                    cv2.imshow("Camera Stream", frame)
+                    cv2.waitKey(1)
             else:
                 print("Camera Stream Issue.")
             end_time = time.time()
-            # print("Frames-per-second (FPS):", 1 / (end_time - start_time))
+            print("Frames-per-second (FPS):", 1 / (end_time - start_time))
         except Exception as error:
             exc_type, exc_obj, exc_tb = sys.exc_info()
             print("Error:", error)
