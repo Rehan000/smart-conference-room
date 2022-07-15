@@ -169,7 +169,7 @@ def main():
             else:
                 print("Camera Stream Issue.")
             end_time = time.time()
-            # print("Frames-per-second (FPS):", 1 / (end_time - start_time))
+            print("Frames-per-second (FPS):", 1 / (end_time - start_time))
         except Exception as error:
             exc_type, exc_obj, exc_tb = sys.exc_info()
             print("Error:", error)
