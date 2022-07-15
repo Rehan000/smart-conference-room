@@ -164,8 +164,8 @@ def main():
                     frame = plot_boxes_custom(frame, rtsp_stream_num=1)
                     frame = plot_boxes_tracks(results=results, frame=frame, tracker=tracker)
                     frame = frame[250:1030, 0:1280]
-                    cv2.imshow("Camera Stream", frame)
-                    cv2.waitKey(1)
+                    # cv2.imshow("Camera Stream", frame)
+                    # cv2.waitKey(1)
             else:
                 print("Camera Stream Issue.")
             end_time = time.time()
