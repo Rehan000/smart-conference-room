@@ -3,6 +3,7 @@ import cv2
 import sys
 import torch
 import time
+import redis
 import numpy as np
 from motpy import Detection, MultiObjectTracker
 
@@ -11,7 +12,8 @@ RTSP_STREAM_1 = "rtsp://servizio:K2KAccesso2021!@188.10.33.54:7554/cam/realmonit
 RTSP_STREAM_2 = "rtsp://servizio:K2KAccesso2021!@188.10.33.54:9554/cam/realmonitor?channel=1&subtype=0"
 RTSP_STREAM_3 = "rtsp://servizio:K2KAccesso2021!@188.10.33.54:8554/cam/realmonitor?channel=1&subtype=0"
 
-TRACKING_ID_LIST_GLOBAL = []
+# Dictionary to store tracking id, person name, bounding box and reconition attempts
+TRACKING_DICT_GLOBAL = {}
 
 
 # Function to resize image while preserving aspect ratio
@@ -102,14 +104,15 @@ def plot_boxes_custom(frame, rtsp_stream_num):
     return frame
 
 
-# Function to get tracking ids and draw tracking bounding boxes for persons
-def plot_boxes_tracks(results, frame, tracker):
+# Function to get tracks for person object using tracker
+def get_tracks(results, frame, tracker):
     labels, cord = results
     n = len(labels)
     x_shape, y_shape = frame.shape[1], frame.shape[0]
     detections_list = []
     tracking_boxes_list = []
     tracking_id_list = []
+
     for i in range(n):
         row = cord[i]
         if row[4] >= 0.20:
@@ -120,20 +123,61 @@ def plot_boxes_tracks(results, frame, tracker):
     for track in tracks:
         tracking_boxes_list.append(track.box)
         tracking_id_list.append(track.id)
-        if track.id not in TRACKING_ID_LIST_GLOBAL:
-            TRACKING_ID_LIST_GLOBAL.append(track.id)
+        if track.id not in TRACKING_DICT_GLOBAL.keys():
+            TRACKING_DICT_GLOBAL[track.id] = ["Unknown", track.box, 0, "RNS"]
             print("New tracking ID created!")
+        else:
+            TRACKING_DICT_GLOBAL[track.id][1] = track.box.tolist()
 
-    for index in range(len(tracking_boxes_list)):
+    for tracking_id in list(TRACKING_DICT_GLOBAL):
+        if tracking_id not in tracking_id_list:
+            del TRACKING_DICT_GLOBAL[tracking_id]
+
+
+# Function to draw tracking bounding boxes for persons
+def plot_boxes_tracks(frame):
+    for tracking_id in TRACKING_DICT_GLOBAL:
         cv2.rectangle(frame,
-                      (int(tracking_boxes_list[index][0]), int(tracking_boxes_list[index][1])),
-                      (int(tracking_boxes_list[index][2]), int(tracking_boxes_list[index][3])),
+                      (int(TRACKING_DICT_GLOBAL[tracking_id][1][0]), int(TRACKING_DICT_GLOBAL[tracking_id][1][1])),
+                      (int(TRACKING_DICT_GLOBAL[tracking_id][1][2]), int(TRACKING_DICT_GLOBAL[tracking_id][1][3])),
                       (255, 0, 0), 2)
-        cv2.putText(frame, tracking_id_list[index],
-                    (int(tracking_boxes_list[index][0]), int(tracking_boxes_list[index][1])),
+        cv2.putText(frame, TRACKING_DICT_GLOBAL[tracking_id][0],
+                    (int(TRACKING_DICT_GLOBAL[tracking_id][1][0]), int(TRACKING_DICT_GLOBAL[tracking_id][1][1])),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 0, 0), 2)
 
     return frame
+
+
+# Function to send cropped person image to process via Redis stream for recognition
+def recognize_person(frame_fullsize, frame_resized, redis_client):
+    for person in TRACKING_DICT_GLOBAL:
+        if TRACKING_DICT_GLOBAL[person][0] == "Unknown" and TRACKING_DICT_GLOBAL[person][2] < 10 \
+                and TRACKING_DICT_GLOBAL[person][3] == "RNS":
+            frame_resized = frame_resized[279:1000, :]
+            x1, y1, x2, y2 = int(TRACKING_DICT_GLOBAL[person][1][0]), int(TRACKING_DICT_GLOBAL[person][1][1]) - 279, \
+                             int(TRACKING_DICT_GLOBAL[person][1][2]), int(TRACKING_DICT_GLOBAL[person][1][3]) - 279
+            new_x1, new_y1, new_x2, new_y2 = int(x1 * (frame_fullsize.shape[1]/frame_resized.shape[1])), \
+                                             int(y1 * (frame_fullsize.shape[0]/frame_resized.shape[0])), \
+                                             int(x2 * (frame_fullsize.shape[1]/frame_resized.shape[1])), \
+                                             int(y2 * (frame_fullsize.shape[0]/frame_resized.shape[0]))
+            person_image = frame_fullsize[new_y1: new_y2, new_x1:new_x2]
+
+            redis_client.xadd(name="Recognition_Request",
+                              fields={
+                                      "Person_Image": cv2.imencode('.jpg', person_image)[1].tobytes(),
+                                      "Tracking_ID": person
+                                     },
+                              maxlen=10,
+                              approximate=False)
+            redis_client.execute_command(f'XTRIM Recognition_Request MAXLEN 10')
+            TRACKING_DICT_GLOBAL[person][3] = "RS"
+            print("Recognition Request Sent!")
+
+
+def recognition_response(redis_client):
+    message = redis_client.xread({'Recognition_Response': '$'}, None, 1)
+    if len(message) != 0:
+        pass
 
 
 def main():
@@ -146,25 +190,34 @@ def main():
                            )
     print("Model loaded.")
 
-    # Initialize camera stream
-    capture = cv2.VideoCapture(RTSP_STREAM_1)
+    # Initialize redis stream
+    redis_client = redis.Redis(host='127.0.0.1')
 
     # Initialize MotPy tracker
     tracker = MultiObjectTracker(dt=2.0)
+
+    # Initialize camera stream
+    capture = cv2.VideoCapture(RTSP_STREAM_1)
 
     while True:
         try:
             start_time = time.time()
             if capture.isOpened():
-                (status, frame) = capture.read()
+                (status, frame_fullsize) = capture.read()
                 if status:
-                    frame = image_resize_aspect(frame, 1280)
-                    results = score_frame(frame=frame, model=model)
-                    # frame = plot_boxes(results=results, frame=frame, model=model)
-                    frame = plot_boxes_custom(frame, rtsp_stream_num=1)
-                    frame = plot_boxes_tracks(results=results, frame=frame, tracker=tracker)
-                    frame = frame[250:1030, 0:1280]
-                    # cv2.imshow("Camera Stream", frame)
+                    frame_resized = image_resize_aspect(frame_fullsize, 1280)
+                    results = score_frame(frame=frame_resized, model=model)
+                    get_tracks(results=results, frame=frame_resized, tracker=tracker)
+                    recognize_person(frame_fullsize=frame_fullsize,
+                                     frame_resized=frame_resized,
+                                     redis_client=redis_client)
+                    # recognition_response(redis_client=redis_client)
+                    # frame_resized = plot_boxes(results=results, frame=frame_resized, model=model)
+                    frame_resized = plot_boxes_custom(frame=frame_resized, rtsp_stream_num=1)
+                    frame_resized = plot_boxes_tracks(frame=frame_resized)
+                    frame_show = frame_resized[250:1030, 0:1280]
+                    print(TRACKING_DICT_GLOBAL)
+                    # cv2.imshow("Camera Stream", frame_show)
                     # cv2.waitKey(1)
             else:
                 print("Camera Stream Issue.")
