@@ -211,7 +211,7 @@ def main():
                     recognize_person(frame_fullsize=frame_fullsize,
                                      frame_resized=frame_resized,
                                      redis_client=redis_client)
-                    # recognition_response(redis_client=redis_client)
+                    recognition_response(redis_client=redis_client)
                     # frame_resized = plot_boxes(results=results, frame=frame_resized, model=model)
                     frame_resized = plot_boxes_custom(frame=frame_resized, rtsp_stream_num=1)
                     frame_resized = plot_boxes_tracks(frame=frame_resized)
