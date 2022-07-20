@@ -4,6 +4,7 @@ import sys
 import torch
 import time
 import redis
+import threading
 import numpy as np
 from motpy import Detection, MultiObjectTracker
 
@@ -14,6 +15,12 @@ RTSP_STREAM_3 = "rtsp://servizio:K2KAccesso2021!@188.10.33.54:8554/cam/realmonit
 
 # Dictionary to store tracking id, person name, bounding box and reconition attempts
 TRACKING_DICT_GLOBAL = {}
+
+# Variable to keep track of delay between person recognition requests
+recognition_time = 0
+
+# Variable to keep track of current camera stream and change according to input
+stream_change = 1
 
 
 # Function to resize image while preserving aspect ratio
@@ -124,7 +131,7 @@ def get_tracks(results, frame, tracker):
         tracking_boxes_list.append(track.box)
         tracking_id_list.append(track.id)
         if track.id not in TRACKING_DICT_GLOBAL.keys():
-            TRACKING_DICT_GLOBAL[track.id] = ["Unknown", track.box, 0, "RNS"]
+            TRACKING_DICT_GLOBAL[track.id] = ["Person", track.box, 0]
             print("New tracking ID created!")
         else:
             TRACKING_DICT_GLOBAL[track.id][1] = track.box.tolist()
@@ -141,7 +148,10 @@ def plot_boxes_tracks(frame):
                       (int(TRACKING_DICT_GLOBAL[tracking_id][1][0]), int(TRACKING_DICT_GLOBAL[tracking_id][1][1])),
                       (int(TRACKING_DICT_GLOBAL[tracking_id][1][2]), int(TRACKING_DICT_GLOBAL[tracking_id][1][3])),
                       (255, 0, 0), 2)
-        cv2.putText(frame, TRACKING_DICT_GLOBAL[tracking_id][0],
+        cv2.putText(frame, "Person",
+                    (int(TRACKING_DICT_GLOBAL[tracking_id][1][0]), int(TRACKING_DICT_GLOBAL[tracking_id][1][1])-20),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 0, 0), 2)
+        cv2.putText(frame, tracking_id,
                     (int(TRACKING_DICT_GLOBAL[tracking_id][1][0]), int(TRACKING_DICT_GLOBAL[tracking_id][1][1])),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 0, 0), 2)
 
@@ -150,9 +160,9 @@ def plot_boxes_tracks(frame):
 
 # Function to send cropped person image to process via Redis stream for recognition
 def recognize_person(frame_fullsize, frame_resized, redis_client):
+    global recognition_time
     for person in TRACKING_DICT_GLOBAL:
-        if TRACKING_DICT_GLOBAL[person][0] == "Unknown" and TRACKING_DICT_GLOBAL[person][2] < 10 \
-                and TRACKING_DICT_GLOBAL[person][3] == "RNS":
+        if TRACKING_DICT_GLOBAL[person][2] < 5 and (time.time() - recognition_time) > 10:
             frame_resized = frame_resized[279:1000, :]
             x1, y1, x2, y2 = int(TRACKING_DICT_GLOBAL[person][1][0]), int(TRACKING_DICT_GLOBAL[person][1][1]) - 279, \
                              int(TRACKING_DICT_GLOBAL[person][1][2]), int(TRACKING_DICT_GLOBAL[person][1][3]) - 279
@@ -170,14 +180,63 @@ def recognize_person(frame_fullsize, frame_resized, redis_client):
                               maxlen=10,
                               approximate=False)
             redis_client.execute_command(f'XTRIM Recognition_Request MAXLEN 10')
-            TRACKING_DICT_GLOBAL[person][3] = "RS"
+            TRACKING_DICT_GLOBAL[person][2] += 1
+            recognition_time = time.time()
             print("Recognition Request Sent!")
 
 
-def recognition_response(redis_client):
-    message = redis_client.xread({'Recognition_Response': '$'}, None, 1)
-    if len(message) != 0:
-        pass
+def main_process(rtsp_stream, rtsp_stream_num, model, redis_client, tracker):
+    # Initialize camera stream
+    capture = cv2.VideoCapture(rtsp_stream)
+
+    while True:
+        try:
+            start_time_fps = time.time()
+            if capture.isOpened():
+                (status, frame_fullsize) = capture.read()
+                if status:
+                    frame_resized = image_resize_aspect(frame_fullsize, 1280)
+                    results = score_frame(frame=frame_resized, model=model)
+                    get_tracks(results=results, frame=frame_resized, tracker=tracker)
+                    recognize_person(frame_fullsize=frame_fullsize,
+                                     frame_resized=frame_resized,
+                                     redis_client=redis_client)
+                    # frame_resized = plot_boxes(results=results, frame=frame_resized, model=model)
+                    frame_resized = plot_boxes_custom(frame=frame_resized, rtsp_stream_num=rtsp_stream_num)
+                    frame_resized = plot_boxes_tracks(frame=frame_resized)
+                    frame_show = frame_resized[250:1030, 0:1280]
+                    print(TRACKING_DICT_GLOBAL)
+                    cv2.imshow("Camera Stream", frame_show)
+                    cv2.waitKey(1)
+
+                    if stream_change == rtsp_stream_num:
+                        pass
+                    else:
+                        if stream_change == 1:
+                            rtsp_stream = RTSP_STREAM_1
+                        elif stream_change == 2:
+                            rtsp_stream = RTSP_STREAM_2
+                        elif stream_change == 3:
+                            rtsp_stream = RTSP_STREAM_3
+                        capture = cv2.VideoCapture(rtsp_stream)
+                        rtsp_stream_num = stream_change
+            else:
+                print("Camera Stream Issue.")
+            end_time_fps = time.time()
+            print("Frames-per-second (FPS):", 1 / (end_time_fps - start_time_fps))
+        except Exception as error:
+            exc_type, exc_obj, exc_tb = sys.exc_info()
+            print("Error:", error)
+            print("Error Line:", exc_tb.tb_lineno)
+
+
+# Function to read redis stream for camera stream change
+def thread_function(redis_client):
+    global stream_change
+    while True:
+        message = redis_client.xread({'Stream_Change': '$'}, None, 0)
+        stream_change = int(message[0][1][0][1][b'Stream_Num'].decode("utf-8"))
+        print("Camera Stream Changed!")
 
 
 def main():
@@ -196,37 +255,13 @@ def main():
     # Initialize MotPy tracker
     tracker = MultiObjectTracker(dt=2.0)
 
-    # Initialize camera stream
-    capture = cv2.VideoCapture(RTSP_STREAM_1)
+    # Thread to monitor stream change
+    stream_change_thread = threading.Thread(target=thread_function, args=(redis_client, ))
+    stream_change_thread.start()
 
-    while True:
-        try:
-            start_time = time.time()
-            if capture.isOpened():
-                (status, frame_fullsize) = capture.read()
-                if status:
-                    frame_resized = image_resize_aspect(frame_fullsize, 1280)
-                    results = score_frame(frame=frame_resized, model=model)
-                    get_tracks(results=results, frame=frame_resized, tracker=tracker)
-                    recognize_person(frame_fullsize=frame_fullsize,
-                                     frame_resized=frame_resized,
-                                     redis_client=redis_client)
-                    recognition_response(redis_client=redis_client)
-                    # frame_resized = plot_boxes(results=results, frame=frame_resized, model=model)
-                    frame_resized = plot_boxes_custom(frame=frame_resized, rtsp_stream_num=1)
-                    frame_resized = plot_boxes_tracks(frame=frame_resized)
-                    frame_show = frame_resized[250:1030, 0:1280]
-                    print(TRACKING_DICT_GLOBAL)
-                    # cv2.imshow("Camera Stream", frame_show)
-                    # cv2.waitKey(1)
-            else:
-                print("Camera Stream Issue.")
-            end_time = time.time()
-            print("Frames-per-second (FPS):", 1 / (end_time - start_time))
-        except Exception as error:
-            exc_type, exc_obj, exc_tb = sys.exc_info()
-            print("Error:", error)
-            print("Error Line:", exc_tb.tb_lineno)
+    # Run the main process function
+    main_process(rtsp_stream=RTSP_STREAM_1, rtsp_stream_num=1,
+                 model=model, redis_client=redis_client, tracker=tracker)
 
 
 if __name__ == '__main__':
