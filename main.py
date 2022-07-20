@@ -219,6 +219,7 @@ def main_process(rtsp_stream, rtsp_stream_num, model, redis_client, tracker):
                         elif stream_change == 3:
                             rtsp_stream = RTSP_STREAM_3
                         capture = cv2.VideoCapture(rtsp_stream)
+                        print("Camera Stream Changed!")
                         rtsp_stream_num = stream_change
             else:
                 print("Camera Stream Issue.")
@@ -236,7 +237,6 @@ def thread_function(redis_client):
     while True:
         message = redis_client.xread({'Stream_Change': '$'}, None, 0)
         stream_change = int(message[0][1][0][1][b'Stream_Num'].decode("utf-8"))
-        print("Camera Stream Changed!")
 
 
 def main():
