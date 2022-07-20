@@ -206,8 +206,8 @@ def main_process(rtsp_stream, rtsp_stream_num, model, redis_client, tracker):
                     frame_resized = plot_boxes_tracks(frame=frame_resized)
                     frame_show = frame_resized[250:1030, 0:1280]
                     print(TRACKING_DICT_GLOBAL)
-                    cv2.imshow("Camera Stream", frame_show)
-                    cv2.waitKey(1)
+                    # cv2.imshow("Camera Stream", frame_show)
+                    # cv2.waitKey(1)
 
                     if stream_change == rtsp_stream_num:
                         pass
