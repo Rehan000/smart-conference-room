@@ -3,6 +3,10 @@ import redis
 import cv2
 import numpy as np
 import rekognition
+from datetime import datetime
+
+# Dictionary to store tracking id, person name and recognition time
+person_dict = {}
 
 
 # Main function
@@ -29,25 +33,16 @@ def main():
             rekognition_response = rekognition_client.search_face(collection_id="FacesCollection",
                                                                   source_image="person_image.jpg")
             print("AWS Rekognition Request Sent!")
-            if len(rekognition_response['FaceMatches']) != 0:
+            if len(rekognition_response['FaceMatches']) != 0 and person_tracking_id not in person_dict:
                 print("Face Matched!")
                 person_name = rekognition_response['FaceMatches'][0]['Face']['ExternalImageId']
+                person_dict[person_tracking_id] = [person_name, datetime.now().strftime("%d/%m/%Y %H:%M:%S")]
             else:
                 print("Face Not Matched!")
-                person_name = "Unknown"
         except rekognition_client.client.exceptions.InvalidParameterException:
             print("No Face Detected!")
-            person_name = "Unknown"
 
-        redis_client.xadd(name="Recognition_Response",
-                          fields={
-                              "Person_Name": person_name,
-                              "Tracking_ID": person_tracking_id
-                          },
-                          maxlen=10,
-                          approximate=False)
-        redis_client.execute_command(f'XTRIM Recognition_Response MAXLEN 10')
-        print("Recognition Response Sent!\n")
+        print(person_dict)
 
 
 if __name__ == '__main__':
