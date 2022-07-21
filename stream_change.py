@@ -16,6 +16,7 @@ def main():
                           },
                           maxlen=10,
                           approximate=False)
+        redis_client.execute_command(f'XTRIM Stream_Change MAXLEN 10')
 
         print("Stream Number Sent!")
 
