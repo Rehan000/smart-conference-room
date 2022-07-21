@@ -30,19 +30,32 @@ def main():
         cv2.imwrite("person_image.jpg", person_image)
 
         try:
-            rekognition_response = rekognition_client.search_face(collection_id="FacesCollection",
-                                                                  source_image="person_image.jpg")
-            print("AWS Rekognition Request Sent!")
-            if len(rekognition_response['FaceMatches']) != 0 and person_tracking_id not in person_dict:
-                print("Face Matched!")
-                person_name = rekognition_response['FaceMatches'][0]['Face']['ExternalImageId']
-                person_dict[person_tracking_id] = [person_name, datetime.now().strftime("%d/%m/%Y %H:%M:%S")]
+            if person_tracking_id not in person_dict:
+                rekognition_response = rekognition_client.search_face(collection_id="FacesCollection",
+                                                                      source_image="person_image.jpg")
+                print("AWS Rekognition Request Sent!")
+                if len(rekognition_response['FaceMatches']) != 0:
+                    print("Face Matched!")
+                    person_name = rekognition_response['FaceMatches'][0]['Face']['ExternalImageId']
+                    person_dict[person_tracking_id] = [person_name, datetime.now().strftime("%d/%m/%Y %H:%M:%S")]
+                else:
+                    print("Face Not Matched!")
             else:
-                print("Face Not Matched!")
+                print("Person Already Recognized!")
         except rekognition_client.client.exceptions.InvalidParameterException:
             print("No Face Detected!")
 
+        redis_client.xadd(name="Person_Details",
+                          fields={
+                              "Person": str(person_dict)
+                          },
+                          maxlen=10,
+                          approximate=False)
+        redis_client.execute_command(f'XTRIM Person_Details MAXLEN 10')
+
+        print("Persons Recognized:")
         print(person_dict)
+        print()
 
 
 if __name__ == '__main__':
