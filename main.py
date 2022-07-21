@@ -250,9 +250,11 @@ def main():
     # Load YOLO model
     print("Loading model.")
     model = torch.hub.load('ultralytics/yolov5', 'custom',
-                           path='best.engine',
-                           force_reload=True
+                           path='best.pt',
+                           force_reload=True,
+                           device="cuda:0"
                            )
+    model.cuda()
     print("Model loaded.")
 
     # Initialize redis stream
