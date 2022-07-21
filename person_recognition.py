@@ -57,6 +57,9 @@ def main():
         print(person_dict)
         print()
 
+        if len(person_dict) > 10:
+            person_dict.clear()
+
 
 if __name__ == '__main__':
     main()

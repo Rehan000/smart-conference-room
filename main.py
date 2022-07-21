@@ -213,8 +213,8 @@ def main_process(rtsp_stream, rtsp_stream_num, model, redis_client, tracker):
                                       approximate=False)
                     redis_client.execute_command(f'XTRIM Frame MAXLEN 10')
                     print(TRACKING_DICT_GLOBAL)
-                    # cv2.imshow("Camera Stream", frame_show)
-                    # cv2.waitKey(1)
+                    cv2.imshow("Camera Stream", frame_show)
+                    cv2.waitKey(1)
 
                     if stream_change == rtsp_stream_num:
                         pass
@@ -250,7 +250,7 @@ def main():
     # Load YOLO model
     print("Loading model.")
     model = torch.hub.load('ultralytics/yolov5', 'custom',
-                           path='best.pt',
+                           path='best.engine',
                            force_reload=True,
                            device="cuda:0"
                            )
@@ -260,7 +260,7 @@ def main():
     redis_client = redis.Redis(host='127.0.0.1')
 
     # Initialize MotPy tracker
-    tracker = MultiObjectTracker(dt=2.0)
+    tracker = MultiObjectTracker(dt=3.0)
 
     # Thread to monitor stream change
     stream_change_thread = threading.Thread(target=thread_function, args=(redis_client, ))
