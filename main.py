@@ -251,8 +251,7 @@ def main():
     print("Loading model.")
     model = torch.hub.load('ultralytics/yolov5', 'custom',
                            path='best.engine',
-                           force_reload=True,
-                           device="cuda:0"
+                           force_reload=True
                            )
     print("Model loaded.")
 
