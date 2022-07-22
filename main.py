@@ -8,7 +8,7 @@ import threading
 import numpy as np
 from motpy import Detection, MultiObjectTracker
 
-# RTSP camera stream client
+# RTSP camera streams
 RTSP_STREAM_1 = "rtsp://servizio:K2KAccesso2021!@188.10.33.54:7554/cam/realmonitor?channel=1&subtype=0"
 RTSP_STREAM_2 = "rtsp://servizio:K2KAccesso2021!@188.10.33.54:9554/cam/realmonitor?channel=1&subtype=0"
 RTSP_STREAM_3 = "rtsp://servizio:K2KAccesso2021!@188.10.33.54:8554/cam/realmonitor?channel=1&subtype=0"
@@ -221,13 +221,20 @@ def main_process(rtsp_stream, rtsp_stream_num, model, redis_client, tracker):
                     else:
                         if stream_change == 1:
                             rtsp_stream = RTSP_STREAM_1
+                            capture = cv2.VideoCapture(rtsp_stream)
+                            print("Camera Stream Changed!")
+                            rtsp_stream_num = stream_change
                         elif stream_change == 2:
                             rtsp_stream = RTSP_STREAM_2
+                            capture = cv2.VideoCapture(rtsp_stream)
+                            print("Camera Stream Changed!")
+                            rtsp_stream_num = stream_change
                         elif stream_change == 3:
                             rtsp_stream = RTSP_STREAM_3
-                        capture = cv2.VideoCapture(rtsp_stream)
-                        print("Camera Stream Changed!")
-                        rtsp_stream_num = stream_change
+                            capture = cv2.VideoCapture(rtsp_stream)
+                            print("Camera Stream Changed!")
+                            rtsp_stream_num = stream_change
+
             else:
                 print("Camera Stream Issue.")
             end_time_fps = time.time()

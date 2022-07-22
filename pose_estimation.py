@@ -3,8 +3,17 @@ import cv2
 import sys
 import time
 import redis
+import threading
 import mediapipe as mp
 import numpy as np
+
+# RTSP camera streams
+RTSP_STREAM_1 = "rtsp://servizio:K2KAccesso2021!@188.10.33.54:7554/cam/realmonitor?channel=1&subtype=0"
+RTSP_STREAM_2 = "rtsp://servizio:K2KAccesso2021!@188.10.33.54:9554/cam/realmonitor?channel=1&subtype=0"
+RTSP_STREAM_3 = "rtsp://servizio:K2KAccesso2021!@188.10.33.54:8554/cam/realmonitor?channel=1&subtype=0"
+
+# Variable to keep track of current camera stream and change according to input
+stream_change = 1
 
 
 # Function to resize image while preserving aspect ratio
@@ -28,10 +37,22 @@ def image_resize_aspect(img, newWidth):
     return np.uint8(new_im)
 
 
+# Function to read redis stream for camera stream change
+def thread_function(redis_client):
+    global stream_change
+    while True:
+        message = redis_client.xread({'Stream_Change': '$'}, None, 0)
+        stream_change = int(message[0][1][0][1][b'Stream_Num'].decode("utf-8"))
+
+
 # Main function
 def main():
     # Initialize redis client
     redis_client = redis.Redis(host='127.0.0.1')
+
+    # Thread to monitor stream change
+    stream_change_thread = threading.Thread(target=thread_function, args=(redis_client,))
+    stream_change_thread.start()
 
     # Initialize mediapipe pose object
     mpPose = mp.solutions.pose
@@ -41,7 +62,9 @@ def main():
     drawing_specs_line = mp.solutions.drawing_utils.DrawingSpec(color=(255, 0, 0), thickness=5)
 
     # Camera stream
-    capture = cv2.VideoCapture("rtsp://servizio:K2KAccesso2021!@188.10.33.54:7554/cam/realmonitor?channel=1&subtype=0")
+    rtsp_stream = RTSP_STREAM_1
+    rtsp_stream_num = 1
+    capture = cv2.VideoCapture(rtsp_stream)
 
     while True:
         try:
@@ -66,6 +89,25 @@ def main():
                     redis_client.execute_command(f'XTRIM Pose_Frame MAXLEN 10')
                     # cv2.imshow("Camera Stream", frame_show)
                     # cv2.waitKey(1)
+
+                    if stream_change == rtsp_stream_num:
+                        pass
+                    else:
+                        if stream_change == 1:
+                            rtsp_stream = RTSP_STREAM_1
+                            capture = cv2.VideoCapture(rtsp_stream)
+                            print("Camera Stream Changed!")
+                            rtsp_stream_num = stream_change
+                        elif stream_change == 2:
+                            rtsp_stream = RTSP_STREAM_2
+                            capture = cv2.VideoCapture(rtsp_stream)
+                            print("Camera Stream Changed!")
+                            rtsp_stream_num = stream_change
+                        elif stream_change == 3:
+                            rtsp_stream = RTSP_STREAM_3
+                            capture = cv2.VideoCapture(rtsp_stream)
+                            print("Camera Stream Changed!")
+                            rtsp_stream_num = stream_change
 
             else:
                 print("Camera Stream Issue!")
