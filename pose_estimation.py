@@ -2,6 +2,7 @@
 import cv2
 import sys
 import time
+import redis
 import mediapipe as mp
 import numpy as np
 
@@ -29,10 +30,19 @@ def image_resize_aspect(img, newWidth):
 
 # Main function
 def main():
-    mpPose = mp.solutions.pose
-    pose = mpPose.Pose()
+    # Initialize redis client
+    redis_client = redis.Redis(host='127.0.0.1')
 
+    # Initialize mediapipe pose object
+    mpPose = mp.solutions.pose
+    mpDraw = mp.solutions.drawing_utils
+    pose = mpPose.Pose()
+    drawing_specs_points = mp.solutions.drawing_utils.DrawingSpec(color=(0, 0, 0), circle_radius=7, thickness=-1)
+    drawing_specs_line = mp.solutions.drawing_utils.DrawingSpec(color=(255, 0, 0), thickness=5)
+
+    # Camera stream
     capture = cv2.VideoCapture("rtsp://servizio:K2KAccesso2021!@188.10.33.54:7554/cam/realmonitor?channel=1&subtype=0")
+
     while True:
         try:
             start_time_fps = time.time()
@@ -41,12 +51,22 @@ def main():
                 if status:
                     frame_fullsize_RGB = cv2.cvtColor(frame_fullsize, cv2.COLOR_BGR2RGB)
                     pose_results = pose.process(frame_fullsize_RGB)
-                    print(pose_results.pose_landmarks)
+                    if pose_results.pose_landmarks:
+                        mpDraw.draw_landmarks(frame_fullsize_RGB, pose_results.pose_landmarks, mpPose.POSE_CONNECTIONS,
+                                              drawing_specs_points, drawing_specs_line)
                     frame_fullsize_BGR = cv2.cvtColor(frame_fullsize_RGB, cv2.COLOR_RGB2BGR)
                     frame_resized = image_resize_aspect(frame_fullsize_BGR, 1280)
                     frame_show = frame_resized[250:1030, 0:1280]
+                    redis_client.xadd(name="Pose_Frame",
+                                      fields={
+                                          "Final_Frame": cv2.imencode('.jpg', frame_show)[1].tobytes()
+                                      },
+                                      maxlen=10,
+                                      approximate=False)
+                    redis_client.execute_command(f'XTRIM Pose_Frame MAXLEN 10')
                     # cv2.imshow("Camera Stream", frame_show)
                     # cv2.waitKey(1)
+
             else:
                 print("Camera Stream Issue!")
             end_time_fps = time.time()

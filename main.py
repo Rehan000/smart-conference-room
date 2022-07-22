@@ -257,7 +257,7 @@ def main():
     model.cuda()
     print("Model loaded.")
 
-    # Initialize redis stream
+    # Initialize redis client
     redis_client = redis.Redis(host='127.0.0.1')
 
     # Initialize MotPy tracker
