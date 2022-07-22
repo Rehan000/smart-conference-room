@@ -19,8 +19,8 @@ def main():
                 if status:
                     frame_fullsize_RGB = cv2.cvtColor(frame_fullsize, cv2.COLOR_BGR2RGB)
                     pose_results = pose.process(frame_fullsize_RGB)
-                    cv2.imshow("Camera Stream", frame_fullsize_RGB)
-                    cv2.waitKey(1)
+                    # cv2.imshow("Camera Stream", frame_fullsize_RGB)
+                    # cv2.waitKey(1)
             else:
                 print("Camera Stream Issue!")
             end_time_fps = time.time()
