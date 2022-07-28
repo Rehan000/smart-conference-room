@@ -7,10 +7,10 @@ import threading
 import mediapipe as mp
 import numpy as np
 
-# RTSP camera streams
-RTSP_STREAM_1 = "rtsp://servizio:K2KAccesso2021!@188.10.33.54:7554/cam/realmonitor?channel=1&subtype=0"
-RTSP_STREAM_2 = "rtsp://servizio:K2KAccesso2021!@188.10.33.54:9554/cam/realmonitor?channel=1&subtype=0"
-RTSP_STREAM_3 = "rtsp://servizio:K2KAccesso2021!@188.10.33.54:8554/cam/realmonitor?channel=1&subtype=0"
+# RTSP camera streams list
+RTSP_STREAM_LIST = ["rtsp://servizio:K2KAccesso2021!@188.10.33.54:7554/cam/realmonitor?channel=1&subtype=0",
+                    "rtsp://servizio:K2KAccesso2021!@188.10.33.54:9554/cam/realmonitor?channel=1&subtype=0",
+                    "rtsp://servizio:K2KAccesso2021!@188.10.33.54:8554/cam/realmonitor?channel=1&subtype=0"]
 
 # Variable to keep track of current camera stream and change according to input
 stream_change = 1
@@ -62,7 +62,7 @@ def main():
     drawing_specs_line = mp.solutions.drawing_utils.DrawingSpec(color=(255, 0, 0), thickness=5)
 
     # Camera stream
-    rtsp_stream = RTSP_STREAM_1
+    rtsp_stream = RTSP_STREAM_LIST[0]
     rtsp_stream_num = 1
     capture = cv2.VideoCapture(rtsp_stream)
 
@@ -92,22 +92,13 @@ def main():
 
                     if stream_change == rtsp_stream_num:
                         pass
+                    elif stream_change > len(RTSP_STREAM_LIST) or stream_change < 1:
+                        pass
                     else:
-                        if stream_change == 1:
-                            rtsp_stream = RTSP_STREAM_1
-                            capture = cv2.VideoCapture(rtsp_stream)
-                            print("Camera Stream Changed!")
-                            rtsp_stream_num = stream_change
-                        elif stream_change == 2:
-                            rtsp_stream = RTSP_STREAM_2
-                            capture = cv2.VideoCapture(rtsp_stream)
-                            print("Camera Stream Changed!")
-                            rtsp_stream_num = stream_change
-                        elif stream_change == 3:
-                            rtsp_stream = RTSP_STREAM_3
-                            capture = cv2.VideoCapture(rtsp_stream)
-                            print("Camera Stream Changed!")
-                            rtsp_stream_num = stream_change
+                        rtsp_stream = RTSP_STREAM_LIST[stream_change-1]
+                        capture = cv2.VideoCapture(rtsp_stream)
+                        print("Camera Stream Changed!")
+                        rtsp_stream_num = stream_change
 
             else:
                 print("Camera Stream Issue!")
