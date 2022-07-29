@@ -1,3 +1,4 @@
+# Import required modules and packages
 import redis
 import asyncio
 import websockets
@@ -6,6 +7,7 @@ import numpy as np
 import base64
 
 
+# Function to send frame from redis stream to websocket
 async def send_frame(websocket):
     while True:
         message = redis_client.xread({'Frame': '$'}, None, 0)
