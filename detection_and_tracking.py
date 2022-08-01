@@ -6,7 +6,6 @@ import time
 import redis
 import threading
 import numpy as np
-import mediapipe as mp
 from motpy import Detection, MultiObjectTracker
 
 # RTSP camera streams list
@@ -25,9 +24,6 @@ recognition_time = 0
 
 # Variable to keep track of current camera stream and change according to input
 stream_change = 1
-
-# Variable to keep track of current process running (Detection/Tracking or Pose Estimation)
-current_process = "Detection/Tracking"
 
 
 # Function to resize image while preserving aspect ratio
@@ -192,27 +188,9 @@ def recognize_person(frame_fullsize, frame_resized, redis_client):
             print("Recognition Request Sent!")
 
 
-# Function to read redis stream for camera stream change
-def thread_function_stream_change(redis_client):
-    global stream_change
-    while True:
-        message = redis_client.xread({'Stream_Change': '$'}, None, 0)
-        stream_change = int(message[0][1][0][1][b'Stream_Num'].decode("utf-8"))
-
-
-def thread_function_process_change(redis_client):
-    global current_process
-    while True:
-        message = redis_client.xread({'Process_Change': '$'}, None, 0)
-        current_process = message[0][1][0][1][b'Process'].decode("utf-8")
-
-
-def main_process(rtsp_stream, rtsp_stream_num, model, redis_client, tracker, mpPose, mpDraw,
-                 pose, drawing_specs_points, drawing_specs_line):
+def main_process(rtsp_stream, rtsp_stream_num, model, redis_client, tracker):
     # Initialize camera stream
     capture = cv2.VideoCapture(rtsp_stream)
-
-    frame_show = None
 
     while True:
         try:
@@ -220,36 +198,24 @@ def main_process(rtsp_stream, rtsp_stream_num, model, redis_client, tracker, mpP
             if capture.isOpened():
                 (status, frame_fullsize) = capture.read()
                 if status:
-                    if current_process == "Detection/Tracking":
-                        frame_resized = image_resize_aspect(frame_fullsize, 1280)
-                        results = score_frame(frame=frame_resized, model=model)
-                        get_tracks(results=results, frame=frame_resized, tracker=tracker)
-                        recognize_person(frame_fullsize=frame_fullsize,
-                                         frame_resized=frame_resized,
-                                         redis_client=redis_client)
-                        # frame_resized = plot_boxes(results=results, frame=frame_resized, model=model)
-                        frame_resized = plot_boxes_custom(frame=frame_resized, rtsp_stream_num=rtsp_stream_num)
-                        frame_resized = plot_boxes_tracks(frame=frame_resized)
-                        frame_show = frame_resized[250:1030, 0:1280]
-                        print(TRACKING_DICT_GLOBAL)
-                    elif current_process == "Pose_Estimation":
-                        frame_fullsize_RGB = cv2.cvtColor(frame_fullsize, cv2.COLOR_BGR2RGB)
-                        pose_results = pose.process(frame_fullsize_RGB)
-                        if pose_results.pose_landmarks:
-                            mpDraw.draw_landmarks(frame_fullsize_RGB, pose_results.pose_landmarks,
-                                                  mpPose.POSE_CONNECTIONS,
-                                                  drawing_specs_points,
-                                                  drawing_specs_line)
-                        frame_fullsize_BGR = cv2.cvtColor(frame_fullsize_RGB, cv2.COLOR_RGB2BGR)
-                        frame_resized = image_resize_aspect(frame_fullsize_BGR, 1280)
-                        frame_show = frame_resized[250:1030, 0:1280]
+                    frame_resized = image_resize_aspect(frame_fullsize, 1280)
+                    results = score_frame(frame=frame_resized, model=model)
+                    get_tracks(results=results, frame=frame_resized, tracker=tracker)
+                    recognize_person(frame_fullsize=frame_fullsize,
+                                     frame_resized=frame_resized,
+                                     redis_client=redis_client)
+                    # frame_resized = plot_boxes(results=results, frame=frame_resized, model=model)
+                    frame_resized = plot_boxes_custom(frame=frame_resized, rtsp_stream_num=rtsp_stream_num)
+                    frame_resized = plot_boxes_tracks(frame=frame_resized)
+                    frame_show = frame_resized[250:1030, 0:1280]
                     redis_client.xadd(name="Frame",
-                        fields={
-                                "Final_Frame": cv2.imencode('.jpg', frame_show)[1].tobytes()
-                        },
-                        maxlen=10,
-                        approximate=False)
+                                      fields={
+                                          "Final_Frame": cv2.imencode('.jpg', frame_show)[1].tobytes()
+                                      },
+                                      maxlen=10,
+                                      approximate=False)
                     redis_client.execute_command(f'XTRIM Frame MAXLEN 10')
+                    print(TRACKING_DICT_GLOBAL)
                     # cv2.imshow("Camera Stream", frame_show)
                     # cv2.waitKey(1)
 
@@ -258,7 +224,7 @@ def main_process(rtsp_stream, rtsp_stream_num, model, redis_client, tracker, mpP
                     elif stream_change > len(RTSP_STREAM_LIST) or stream_change < 1:
                         pass
                     else:
-                        rtsp_stream = RTSP_STREAM_LIST[stream_change - 1]
+                        rtsp_stream = RTSP_STREAM_LIST[stream_change-1]
                         capture = cv2.VideoCapture(rtsp_stream)
                         print("Camera Stream Changed!")
                         rtsp_stream_num = stream_change
@@ -272,25 +238,25 @@ def main_process(rtsp_stream, rtsp_stream_num, model, redis_client, tracker, mpP
             print("Error Line:", exc_tb.tb_lineno)
 
 
+# Function to read redis stream for camera stream change
+def thread_function(redis_client):
+    global stream_change
+    while True:
+        message = redis_client.xread({'Stream_Change': '$'}, None, 0)
+        stream_change = int(message[0][1][0][1][b'Stream_Num'].decode("utf-8"))
+
+
 # Main function
 def main():
     # Load YOLO model
-    print("Loading YOLOv5 model.")
+    print("Loading model.")
     model = torch.hub.load('ultralytics/yolov5', 'custom',
                            path='best.pt',
                            force_reload=True,
                            device="cuda:0"
                            )
     model.cuda()
-    print("YOLOv5 model loaded. \n")
-
-    print("Loading pose estimation model.")
-    # Initialize mediapipe pose object
-    mpPose = mp.solutions.pose
-    mpDraw = mp.solutions.drawing_utils
-    pose = mpPose.Pose()
-    drawing_specs_points = mp.solutions.drawing_utils.DrawingSpec(color=(0, 0, 0), circle_radius=7, thickness=-1)
-    drawing_specs_line = mp.solutions.drawing_utils.DrawingSpec(color=(255, 0, 0), thickness=5)
+    print("Model loaded.")
 
     # Initialize redis client
     redis_client = redis.Redis(host='127.0.0.1')
@@ -299,19 +265,12 @@ def main():
     tracker = MultiObjectTracker(dt=3.0)
 
     # Thread to monitor stream change
-    stream_change_thread = threading.Thread(target=thread_function_stream_change, args=(redis_client,))
+    stream_change_thread = threading.Thread(target=thread_function, args=(redis_client, ))
     stream_change_thread.start()
-
-    # Thread to monitor process change
-    process_change_thread = threading.Thread(target=thread_function_process_change, args=(redis_client,))
-    process_change_thread.start()
 
     # Run the main process function
     main_process(rtsp_stream=RTSP_STREAM_LIST[0], rtsp_stream_num=1,
-                 model=model, redis_client=redis_client, tracker=tracker,
-                 mpPose=mpPose, mpDraw=mpDraw, pose=pose,
-                 drawing_specs_points=drawing_specs_points,
-                 drawing_specs_line = drawing_specs_line)
+                 model=model, redis_client=redis_client, tracker=tracker)
 
 
 if __name__ == '__main__':

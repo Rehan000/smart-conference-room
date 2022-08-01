@@ -10,14 +10,24 @@ app = Flask(__name__)
 @app.route('/', methods=['GET'])
 def get_stream():
     args = request.args
-    redis_client.xadd(name="Stream_Change",
-                      fields={
-                          "Stream_Num": args.get("stream"),
-                      },
-                      maxlen=10,
-                      approximate=False)
-    redis_client.execute_command(f'XTRIM Stream_Change MAXLEN 10')
-    print("Stream Change Sent!")
+    if args.get("stream") is not None:
+        redis_client.xadd(name="Stream_Change",
+                          fields={
+                                  "Stream_Num": args.get("stream"),
+                          },
+                          maxlen=10,
+                          approximate=False)
+        redis_client.execute_command(f'XTRIM Stream_Change MAXLEN 10')
+        print("Stream Change Sent!")
+    if args.get("process") is not None:
+        redis_client.xadd(name="Process_Change",
+                          fields={
+                                  "Process": args.get("process"),
+                          },
+                          maxlen=10,
+                          approximate=False)
+        redis_client.execute_command(f'XTRIM Stream_Change MAXLEN 10')
+        print("Process Change Sent!")
     return args
 
 
