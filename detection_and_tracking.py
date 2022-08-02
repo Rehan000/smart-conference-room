@@ -208,13 +208,13 @@ def main_process(rtsp_stream, rtsp_stream_num, model, redis_client, tracker):
                     frame_resized = plot_boxes_custom(frame=frame_resized, rtsp_stream_num=rtsp_stream_num)
                     frame_resized = plot_boxes_tracks(frame=frame_resized)
                     frame_show = frame_resized[250:1030, 0:1280]
-                    redis_client.xadd(name="Frame",
+                    redis_client.xadd(name="Detection_Frame",
                                       fields={
                                           "Final_Frame": cv2.imencode('.jpg', frame_show)[1].tobytes()
                                       },
                                       maxlen=10,
                                       approximate=False)
-                    redis_client.execute_command(f'XTRIM Frame MAXLEN 10')
+                    redis_client.execute_command(f'XTRIM Detection_Frame MAXLEN 10')
                     print(TRACKING_DICT_GLOBAL)
                     # cv2.imshow("Camera Stream", frame_show)
                     # cv2.waitKey(1)

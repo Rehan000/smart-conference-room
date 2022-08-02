@@ -27,7 +27,7 @@ recognition_time = 0
 stream_change = 1
 
 # Variable to keep track of current process running (Detection/Tracking or Pose Estimation)
-current_process = "Detection/Tracking"
+process_change = "Detection/Tracking"
 
 
 # Function to resize image while preserving aspect ratio
@@ -201,10 +201,10 @@ def thread_function_stream_change(redis_client):
 
 
 def thread_function_process_change(redis_client):
-    global current_process
+    global process_change
     while True:
         message = redis_client.xread({'Process_Change': '$'}, None, 0)
-        current_process = message[0][1][0][1][b'Process'].decode("utf-8")
+        process_change = message[0][1][0][1][b'Process'].decode("utf-8")
 
 
 def main_process(rtsp_stream, rtsp_stream_num, model, redis_client, tracker, mpPose, mpDraw,
@@ -220,7 +220,7 @@ def main_process(rtsp_stream, rtsp_stream_num, model, redis_client, tracker, mpP
             if capture.isOpened():
                 (status, frame_fullsize) = capture.read()
                 if status:
-                    if current_process == "Detection/Tracking":
+                    if process_change == "Detection/Tracking":
                         frame_resized = image_resize_aspect(frame_fullsize, 1280)
                         results = score_frame(frame=frame_resized, model=model)
                         get_tracks(results=results, frame=frame_resized, tracker=tracker)
@@ -232,7 +232,7 @@ def main_process(rtsp_stream, rtsp_stream_num, model, redis_client, tracker, mpP
                         frame_resized = plot_boxes_tracks(frame=frame_resized)
                         frame_show = frame_resized[250:1030, 0:1280]
                         print(TRACKING_DICT_GLOBAL)
-                    elif current_process == "Pose_Estimation":
+                    elif process_change == "Pose_Estimation":
                         frame_fullsize_RGB = cv2.cvtColor(frame_fullsize, cv2.COLOR_BGR2RGB)
                         pose_results = pose.process(frame_fullsize_RGB)
                         if pose_results.pose_landmarks:
