@@ -278,8 +278,8 @@ def main():
     print("Loading YOLOv5 model.")
     model = torch.hub.load('ultralytics/yolov5', 'custom',
                            path='best.pt',
-                           force_reload=True
-                           # device="cuda:0"
+                           force_reload=True,
+                           device="cuda:0"
                            )
     model.cuda()
     print("YOLOv5 model loaded. \n")
