@@ -215,9 +215,9 @@ def main_process(rtsp_stream, rtsp_stream_num, model, redis_client, tracker):
     while True:
         try:
             if capture.isOpened():
-                (status, frame_fullsize) = capture.read()
-                if status:
-                    if process_change == "Detection/Tracking":
+                if process_change == "Detection/Tracking":
+                    (status, frame_fullsize) = capture.read()
+                    if status:
                         start_time_fps = time.time()
                         frame_resized = image_resize_aspect(frame_fullsize, 1280)
                         results = score_frame(frame=frame_resized, model=model)
@@ -241,18 +241,18 @@ def main_process(rtsp_stream, rtsp_stream_num, model, redis_client, tracker):
                         print("Frames-per-second (FPS):", 1 / (end_time_fps - start_time_fps))
                         # cv2.imshow("Camera Stream", frame_show)
                         # cv2.waitKey(1)
-
-                    if stream_change == rtsp_stream_num:
-                        pass
-                    elif stream_change > len(RTSP_STREAM_LIST) or stream_change < 1:
-                        pass
                     else:
-                        rtsp_stream = RTSP_STREAM_LIST[stream_change - 1]
-                        capture = cv2.VideoCapture(rtsp_stream)
-                        print("Camera Stream Changed!")
-                        rtsp_stream_num = stream_change
-            else:
-                print("Camera Stream Issue.")
+                        print("Camera Stream Issue.")
+
+                if stream_change == rtsp_stream_num:
+                    pass
+                elif stream_change > len(RTSP_STREAM_LIST) or stream_change < 1:
+                    pass
+                else:
+                    rtsp_stream = RTSP_STREAM_LIST[stream_change - 1]
+                    capture = cv2.VideoCapture(rtsp_stream)
+                    print("Camera Stream Changed!")
+                    rtsp_stream_num = stream_change
         except Exception as error:
             exc_type, exc_obj, exc_tb = sys.exc_info()
             print("Error:", error)

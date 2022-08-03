@@ -67,9 +67,9 @@ def main_process(rtsp_stream, rtsp_stream_num, redis_client,
     while True:
         try:
             if capture.isOpened():
-                (status, frame_fullsize) = capture.read()
-                if status:
-                    if process_change == "Pose_Estimation":
+                if process_change == "Pose_Estimation":
+                    (status, frame_fullsize) = capture.read()
+                    if status:
                         start_time_fps = time.time()
                         frame_fullsize_RGB = cv2.cvtColor(frame_fullsize, cv2.COLOR_BGR2RGB)
                         pose_results = pose.process(frame_fullsize_RGB)
@@ -92,18 +92,19 @@ def main_process(rtsp_stream, rtsp_stream_num, redis_client,
                         print("Frames-per-second (FPS):", 1 / (end_time_fps - start_time_fps))
                         # cv2.imshow("Camera Stream", frame_show)
                         # cv2.waitKey(1)
-
-                    if stream_change == rtsp_stream_num:
-                        pass
-                    elif stream_change > len(RTSP_STREAM_LIST) or stream_change < 1:
-                        pass
                     else:
-                        rtsp_stream = RTSP_STREAM_LIST[stream_change - 1]
-                        capture = cv2.VideoCapture(rtsp_stream)
-                        print("Camera Stream Changed!")
-                        rtsp_stream_num = stream_change
-            else:
-                print("Camera Stream Issue.")
+                        print("Camera Stream Issue.")
+
+                if stream_change == rtsp_stream_num:
+                    pass
+                elif stream_change > len(RTSP_STREAM_LIST) or stream_change < 1:
+                    pass
+                else:
+                    rtsp_stream = RTSP_STREAM_LIST[stream_change - 1]
+                    capture = cv2.VideoCapture(rtsp_stream)
+                    print("Camera Stream Changed!")
+                    rtsp_stream_num = stream_change
+
         except Exception as error:
             exc_type, exc_obj, exc_tb = sys.exc_info()
             print("Error:", error)
