@@ -1,12 +1,11 @@
-# import required modules and packages
-import cv2
-import sys
+# Import required modules and packages
 import torch
-import time
 import redis
 import threading
+import cv2
+import sys
+import time
 import numpy as np
-import mediapipe as mp
 from motpy import Detection, MultiObjectTracker
 
 # RTSP camera streams list
@@ -28,7 +27,6 @@ stream_change = 1
 
 # Variable to keep track of current process running (Detection/Tracking or Pose Estimation)
 process_change = "Detection/Tracking"
-
 
 # Function to resize image while preserving aspect ratio
 def image_resize_aspect(img, newWidth):
@@ -208,8 +206,7 @@ def thread_function_process_change(redis_client):
         process_change = message[0][1][0][1][b'Process'].decode("utf-8")
 
 
-def main_process(rtsp_stream, rtsp_stream_num, model, redis_client, tracker, mpPose, mpDraw,
-                 pose, drawing_specs_points, drawing_specs_line):
+def main_process(rtsp_stream, rtsp_stream_num, model, redis_client, tracker):
     # Initialize camera stream
     capture = cv2.VideoCapture(rtsp_stream)
 
@@ -233,26 +230,15 @@ def main_process(rtsp_stream, rtsp_stream_num, model, redis_client, tracker, mpP
                         frame_resized = plot_boxes_tracks(frame=frame_resized)
                         frame_show = frame_resized[250:1030, 0:1280]
                         print(TRACKING_DICT_GLOBAL)
-                    elif process_change == "Pose_Estimation":
-                        frame_fullsize_RGB = cv2.cvtColor(frame_fullsize, cv2.COLOR_BGR2RGB)
-                        pose_results = pose.process(frame_fullsize_RGB)
-                        if pose_results.pose_landmarks:
-                            mpDraw.draw_landmarks(frame_fullsize_RGB, pose_results.pose_landmarks,
-                                                  mpPose.POSE_CONNECTIONS,
-                                                  drawing_specs_points,
-                                                  drawing_specs_line)
-                        frame_fullsize_BGR = cv2.cvtColor(frame_fullsize_RGB, cv2.COLOR_RGB2BGR)
-                        frame_resized = image_resize_aspect(frame_fullsize_BGR, 1280)
-                        frame_show = frame_resized[250:1030, 0:1280]
-                    redis_client.xadd(name="Frame",
-                        fields={
-                                "Final_Frame": cv2.imencode('.jpg', frame_show)[1].tobytes()
-                        },
-                        maxlen=10,
-                        approximate=False)
-                    redis_client.execute_command(f'XTRIM Frame MAXLEN 10')
-                    # cv2.imshow("Camera Stream", frame_show)
-                    # cv2.waitKey(1)
+                        redis_client.xadd(name="Frame",
+                            fields={
+                                    "Final_Frame": cv2.imencode('.jpg', frame_show)[1].tobytes()
+                            },
+                            maxlen=10,
+                            approximate=False)
+                        redis_client.execute_command(f'XTRIM Frame MAXLEN 10')
+                        # cv2.imshow("Camera Stream", frame_show)
+                        # cv2.waitKey(1)
 
                     if stream_change == rtsp_stream_num:
                         pass
@@ -285,14 +271,6 @@ def main():
     model.cuda()
     print("YOLOv5 model loaded. \n")
 
-    print("Loading pose estimation model.")
-    # Initialize mediapipe pose object
-    mpPose = mp.solutions.pose
-    mpDraw = mp.solutions.drawing_utils
-    pose = mpPose.Pose()
-    drawing_specs_points = mp.solutions.drawing_utils.DrawingSpec(color=(0, 0, 0), circle_radius=7, thickness=-1)
-    drawing_specs_line = mp.solutions.drawing_utils.DrawingSpec(color=(255, 0, 0), thickness=5)
-
     # Initialize redis client
     redis_client = redis.Redis(host='127.0.0.1')
 
@@ -309,10 +287,7 @@ def main():
 
     # Run the main process function
     main_process(rtsp_stream=RTSP_STREAM_LIST[0], rtsp_stream_num=1,
-                 model=model, redis_client=redis_client, tracker=tracker,
-                 mpPose=mpPose, mpDraw=mpDraw, pose=pose,
-                 drawing_specs_points=drawing_specs_points,
-                 drawing_specs_line = drawing_specs_line)
+                 model=model, redis_client=redis_client, tracker=tracker)
 
 
 if __name__ == '__main__':
