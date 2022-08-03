@@ -66,11 +66,11 @@ def main_process(rtsp_stream, rtsp_stream_num, redis_client,
 
     while True:
         try:
-            start_time_fps = time.time()
             if capture.isOpened():
                 (status, frame_fullsize) = capture.read()
                 if status:
                     if process_change == "Pose_Estimation":
+                        start_time_fps = time.time()
                         frame_fullsize_RGB = cv2.cvtColor(frame_fullsize, cv2.COLOR_BGR2RGB)
                         pose_results = pose.process(frame_fullsize_RGB)
                         if pose_results.pose_landmarks:
@@ -88,6 +88,8 @@ def main_process(rtsp_stream, rtsp_stream_num, redis_client,
                             maxlen=10,
                             approximate=False)
                         redis_client.execute_command(f'XTRIM Frame MAXLEN 10')
+                        end_time_fps = time.time()
+                        print("Frames-per-second (FPS):", 1 / (end_time_fps - start_time_fps))
                         # cv2.imshow("Camera Stream", frame_show)
                         # cv2.waitKey(1)
 
@@ -102,8 +104,6 @@ def main_process(rtsp_stream, rtsp_stream_num, redis_client,
                         rtsp_stream_num = stream_change
             else:
                 print("Camera Stream Issue.")
-            end_time_fps = time.time()
-            print("Frames-per-second (FPS):", 1 / (end_time_fps - start_time_fps))
         except Exception as error:
             exc_type, exc_obj, exc_tb = sys.exc_info()
             print("Error:", error)

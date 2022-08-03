@@ -214,11 +214,11 @@ def main_process(rtsp_stream, rtsp_stream_num, model, redis_client, tracker):
 
     while True:
         try:
-            start_time_fps = time.time()
             if capture.isOpened():
                 (status, frame_fullsize) = capture.read()
                 if status:
                     if process_change == "Detection/Tracking":
+                        start_time_fps = time.time()
                         frame_resized = image_resize_aspect(frame_fullsize, 1280)
                         results = score_frame(frame=frame_resized, model=model)
                         get_tracks(results=results, frame=frame_resized, tracker=tracker)
@@ -237,6 +237,8 @@ def main_process(rtsp_stream, rtsp_stream_num, model, redis_client, tracker):
                             maxlen=10,
                             approximate=False)
                         redis_client.execute_command(f'XTRIM Frame MAXLEN 10')
+                        end_time_fps = time.time()
+                        print("Frames-per-second (FPS):", 1 / (end_time_fps - start_time_fps))
                         # cv2.imshow("Camera Stream", frame_show)
                         # cv2.waitKey(1)
 
@@ -251,8 +253,6 @@ def main_process(rtsp_stream, rtsp_stream_num, model, redis_client, tracker):
                         rtsp_stream_num = stream_change
             else:
                 print("Camera Stream Issue.")
-            end_time_fps = time.time()
-            print("Frames-per-second (FPS):", 1 / (end_time_fps - start_time_fps))
         except Exception as error:
             exc_type, exc_obj, exc_tb = sys.exc_info()
             print("Error:", error)
