@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Conference Room</title>
+</head>
+
+<body>
+    <button onClick="fetch('http://localhost:5000/?stream=1').then(res => console.log(res)).catch(e => console.log(e))">Stream 1</button>
+    <button onClick="fetch('http://localhost:5000/?stream=2').then(res => console.log(res)).catch(e => console.log(e))">Stream 2</button>
+    <button onClick="fetch('http://localhost:5000/?stream=3').then(res => console.log(res)).catch(e => console.log(e))">Stream 3</button>
+    <button onClick="fetch('http://localhost:5000/?process=Detection/Tracking').then(res => console.log(res)).catch(e => console.log(e))">Detection/Tracking</button>
+    <button onClick="fetch('http://localhost:5000/?process=Pose_Estimation').then(res => console.log(res)).catch(e => console.log(e))">Pose Estimation</button>
+    <canvas height=780 width=1280 id="c"/>
+
+</body>
+
+<script type="text/javascript" src="websockets.js"></script>
+
+
+</html>
